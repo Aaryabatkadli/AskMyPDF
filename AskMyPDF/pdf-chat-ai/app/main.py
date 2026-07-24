@@ -267,20 +267,24 @@ def main():
             selected_model = None  # qa_engine uses the configured default automatically
 
         else:
-            # Local development: show Ollama status + let the user pick a pulled model.
+            # Local development: show Ollama status + let the user pick a model.
+            # A dropdown is always shown - if Ollama isn't reachable yet, it falls
+            # back to a static list of common model names so you can still pick
+            # one ahead of pulling/starting Ollama.
+            COMMON_OLLAMA_MODELS = [
+                "llama3.2", "llama3.1", "llama3", "mistral",
+                "gemma2", "phi3", "qwen2.5",
+            ]
+
             if llm_ok:
                 st.markdown(
                     '<div class="status-pill status-online">🟢 Ollama running</div>',
                     unsafe_allow_html=True,
                 )
                 models = list_available_models()
-                if models:
-                    selected_model = st.selectbox("Model", models, index=(
-                        models.index(OLLAMA_MODEL) if OLLAMA_MODEL in models else 0
-                    ))
-                else:
+                if not models:
                     st.warning(f"No models pulled yet. Run: `ollama pull {OLLAMA_MODEL}`")
-                    selected_model = OLLAMA_MODEL
+                    models = COMMON_OLLAMA_MODELS
             else:
                 st.markdown(
                     '<div class="status-pill status-offline">🔴 Ollama not detected</div>',
@@ -292,7 +296,13 @@ def main():
                     "Ollama usually starts automatically after install. "
                     "If not, run `ollama serve`."
                 )
-                selected_model = OLLAMA_MODEL
+                models = COMMON_OLLAMA_MODELS
+
+            selected_model = st.selectbox(
+                "Model",
+                models,
+                index=(models.index(OLLAMA_MODEL) if OLLAMA_MODEL in models else 0),
+            )
 
         # --- Chat history, directly below the model picker ---
         # Grouped by PDF, so the user can review every document they've
