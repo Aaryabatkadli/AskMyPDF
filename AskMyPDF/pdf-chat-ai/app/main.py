@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 from app.config import UPLOAD_DIR, OLLAMA_MODEL, LLM_PROVIDER
 from app.core.ingest import ingest_pdf
-from app.core.vector_store import VectorStore
+from app.core.vector_store import VectorStore, EmbeddingError
 from app.core.qa_engine import ask_question, check_llm_available, list_available_models, LLMConnectionError
 from app.core.highlighter import render_highlighted_page
 
@@ -349,8 +349,16 @@ def main():
             with open(pdf_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
-            with st.spinner("Reading and indexing your PDF (OCR runs automatically on scanned pages)..."):
-                summary = ingest_pdf(pdf_path, doc_name, store)
+            try:
+                with st.spinner("Reading and indexing your PDF (OCR runs automatically on scanned pages)..."):
+                    summary = ingest_pdf(pdf_path, doc_name, store)
+            except EmbeddingError as e:
+                st.error(
+                    f"⚠️ Couldn't index this PDF: {e}\n\n"
+                    "This document won't be searchable until this is fixed. "
+                    "Try re-uploading, or check the app logs for details."
+                )
+                st.stop()
 
             st.session_state.doc_name = doc_name
             st.session_state.pdf_path = pdf_path
@@ -358,6 +366,12 @@ def main():
 
             if summary["already_indexed"]:
                 st.info("This document was already indexed. Ready to chat!")
+            elif summary["chunks"] == 0:
+                st.warning(
+                    "No readable text was found in this PDF, so there's nothing to "
+                    "search yet. It may be a scanned document and OCR isn't available "
+                    "in this environment, or the file may be empty/corrupted."
+                )
             else:
                 st.success(
                     f"Indexed {summary['pages']} pages into {summary['chunks']} chunks "
@@ -392,14 +406,21 @@ def main():
             matches = store.query(question, doc_name=st.session_state.doc_name)
 
             with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    try:
-                        answer = ask_question(question, matches, model=selected_model)
-                    except LLMConnectionError as e:
-                        answer = f"⚠️ {e}"
-                st.write(answer)
-
-                if matches:
+                if not matches:
+                    answer = (
+                        "I couldn't find any indexed content for this document to search. "
+                        "This usually means the PDF had no readable text when it was "
+                        "uploaded (e.g. a scanned page with OCR unavailable, or an "
+                        "indexing error) - try re-uploading it."
+                    )
+                    st.write(answer)
+                else:
+                    with st.spinner("Thinking..."):
+                        try:
+                            answer = ask_question(question, matches, model=selected_model)
+                        except LLMConnectionError as e:
+                            answer = f"⚠️ {e}"
+                    st.write(answer)
                     render_sources(matches, st.session_state.pdf_path)
 
             st.session_state.history_log.append({
