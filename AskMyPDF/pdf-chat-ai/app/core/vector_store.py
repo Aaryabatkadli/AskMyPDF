@@ -9,10 +9,19 @@ from app.config import CHROMA_DIR, EMBEDDING_MODEL, TOP_K
 _embedder = None
 
 
+class EmbeddingError(Exception):
+    pass
+
+
 def get_embedder() -> SentenceTransformer:
     global _embedder
     if _embedder is None:
-        _embedder = SentenceTransformer(EMBEDDING_MODEL)
+        try:
+            _embedder = SentenceTransformer(EMBEDDING_MODEL)
+        except Exception as e:
+            raise EmbeddingError(
+                f"Couldn't load the embedding model ({EMBEDDING_MODEL}): {e}"
+            )
     return _embedder
 
 
@@ -26,7 +35,10 @@ class VectorStore:
             return
         embedder = get_embedder()
         texts = [c["text"] for c in chunks]
-        embeddings = embedder.encode(texts, show_progress_bar=False).tolist()
+        try:
+            embeddings = embedder.encode(texts, show_progress_bar=False).tolist()
+        except Exception as e:
+            raise EmbeddingError(f"Failed to generate embeddings for this document: {e}")
 
         self.collection.add(
             ids=[c["id"] for c in chunks],
