@@ -44,8 +44,8 @@ OLLAMA_MODEL = _get("OLLAMA_MODEL", "llama3.2")
 GROQ_API_KEY = _get("GROQ_API_KEY", "")
 GROQ_MODEL = _get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-# --- Embeddings (local, downloaded once from HuggingFace, free) ---
-EMBEDDING_MODEL = _get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+# --- Embeddings (local, ONNX-based via fastembed - lightweight, no PyTorch) ---
+EMBEDDING_MODEL = _get("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 
 # --- Chunking ---
 CHUNK_SIZE = int(_get("CHUNK_SIZE", "800"))
