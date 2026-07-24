@@ -3,9 +3,14 @@ Central configuration for the app. Reads from environment variables (.env)
 locally, and from Streamlit secrets when deployed on Streamlit Community Cloud.
 """
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # python-dotenv not installed (e.g. requirements.txt wasn't picked up on
+    # deploy) - safe to continue, since Streamlit Cloud uses st.secrets anyway.
+    pass
 
 try:
     import streamlit as st
