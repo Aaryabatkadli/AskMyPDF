@@ -1,9 +1,12 @@
 """
-Wraps ChromaDB (persistent, local, free) using sentence-transformers
-for embeddings (also local, free, downloaded once from HuggingFace).
+Wraps ChromaDB (persistent, local, free) using fastembed for embeddings.
+
+fastembed runs on ONNX Runtime instead of PyTorch, which keeps memory
+usage far lower than sentence-transformers - important for running
+comfortably within Streamlit Community Cloud's free-tier resource limits.
 """
 import chromadb
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from app.config import CHROMA_DIR, EMBEDDING_MODEL, TOP_K
 
 _embedder = None
@@ -13,16 +16,21 @@ class EmbeddingError(Exception):
     pass
 
 
-def get_embedder() -> SentenceTransformer:
+def get_embedder() -> TextEmbedding:
     global _embedder
     if _embedder is None:
         try:
-            _embedder = SentenceTransformer(EMBEDDING_MODEL)
+            _embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
         except Exception as e:
             raise EmbeddingError(
                 f"Couldn't load the embedding model ({EMBEDDING_MODEL}): {e}"
             )
     return _embedder
+
+
+def _embed(embedder: TextEmbedding, texts: list[str]) -> list[list[float]]:
+    # fastembed returns a generator of numpy arrays - materialize to plain lists
+    return [vec.tolist() for vec in embedder.embed(texts)]
 
 
 class VectorStore:
@@ -36,7 +44,7 @@ class VectorStore:
         embedder = get_embedder()
         texts = [c["text"] for c in chunks]
         try:
-            embeddings = embedder.encode(texts, show_progress_bar=False).tolist()
+            embeddings = _embed(embedder, texts)
         except Exception as e:
             raise EmbeddingError(f"Failed to generate embeddings for this document: {e}")
 
@@ -52,7 +60,7 @@ class VectorStore:
 
     def query(self, question: str, doc_name: str | None = None, top_k: int = TOP_K) -> list[dict]:
         embedder = get_embedder()
-        query_embedding = embedder.encode([question]).tolist()
+        query_embedding = _embed(embedder, [question])
 
         where = {"doc_name": doc_name} if doc_name else None
 
